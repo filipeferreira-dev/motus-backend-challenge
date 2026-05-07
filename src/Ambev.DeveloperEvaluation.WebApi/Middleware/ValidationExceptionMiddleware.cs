@@ -1,4 +1,4 @@
-﻿using Ambev.DeveloperEvaluation.Common.Validation;
+using Ambev.DeveloperEvaluation.Common.Validation;
 using Ambev.DeveloperEvaluation.WebApi.Common;
 using FluentValidation;
 using System.Text.Json;
@@ -24,20 +24,49 @@ namespace Ambev.DeveloperEvaluation.WebApi.Middleware
             {
                 await HandleValidationExceptionAsync(context, ex);
             }
+            catch (DomainException ex)
+            {
+                await WriteResponseAsync(context, StatusCodes.Status400BadRequest, "Domain rule violated", new ApiResponse
+                {
+                    Success = false,
+                    Message = ex.Message,
+                    Errors = Array.Empty<ValidationErrorDetail>()
+                });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                await WriteResponseAsync(context, StatusCodes.Status404NotFound, "Not found", new ApiResponse
+                {
+                    Success = false,
+                    Message = ex.Message,
+                    Errors = Array.Empty<ValidationErrorDetail>()
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                await WriteResponseAsync(context, StatusCodes.Status400BadRequest, "Invalid operation", new ApiResponse
+                {
+                    Success = false,
+                    Message = ex.Message,
+                    Errors = Array.Empty<ValidationErrorDetail>()
+                });
+            }
         }
 
         private static Task HandleValidationExceptionAsync(HttpContext context, ValidationException exception)
         {
-            context.Response.ContentType = "application/json";
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-
-            var response = new ApiResponse
+            return WriteResponseAsync(context, StatusCodes.Status400BadRequest, "Validation Failed", new ApiResponse
             {
                 Success = false,
                 Message = "Validation Failed",
-                Errors = exception.Errors
-                    .Select(error => (ValidationErrorDetail)error)
-            };
+                Errors = exception.Errors.Select(error => (ValidationErrorDetail)error)
+            });
+        }
+
+        private static Task WriteResponseAsync(HttpContext context, int statusCode, string _logCategory, ApiResponse response)
+        {
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = statusCode;
 
             var jsonOptions = new JsonSerializerOptions
             {
