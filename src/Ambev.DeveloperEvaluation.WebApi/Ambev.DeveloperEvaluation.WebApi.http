@@ -1,4 +1,4 @@
-@host = http://localhost:5119
+@host = https://localhost:7181
 
 # ---------------------------------------------------------------------------
 # 0. Authenticate
@@ -19,6 +19,8 @@ Content-Type: application/json
   "role": 1
 }
 
+###
+
 ### Authenticate
 # @name login
 POST {{host}}/api/auth
@@ -29,7 +31,7 @@ Content-Type: application/json
   "password": "Test@123!"
 }
 
-@token = {{login.response.body.data.token}}
+###
 
 # ---------------------------------------------------------------------------
 # 1. Create sale - golden path (mixed-tier discounts)
@@ -42,11 +44,11 @@ Content-Type: application/json
 ### Create sale (mixed tiers) -> expect 201, totalAmount = 206
 # @name createSale
 POST {{host}}/api/sales
-Authorization: Bearer {{token}}
+Authorization: Bearer {{login.response.body.$.data.token}}
 Content-Type: application/json
 
 {
-  "saleNumber": "S-DEMO-001",
+  "saleNumber": "S-DEMO-002",
   "saleDate": "2026-05-08T10:00:00Z",
   "customerId": "11111111-1111-1111-1111-111111111111",
   "customerName": "Acme Corp",
@@ -59,7 +61,7 @@ Content-Type: application/json
   ]
 }
 
-@saleId = {{createSale.response.body.data.id}}
+###
 
 # ---------------------------------------------------------------------------
 # 2. Create sale - reject quantity > 20
@@ -67,7 +69,7 @@ Content-Type: application/json
 
 ### Create sale (qty 21) -> expect 400 with DomainException message
 POST {{host}}/api/sales
-Authorization: Bearer {{token}}
+Authorization: Bearer {{login.response.body.$.data.token}}
 Content-Type: application/json
 
 {
@@ -82,33 +84,37 @@ Content-Type: application/json
   ]
 }
 
+###
+
 # ---------------------------------------------------------------------------
 # 3. Get sale by id
 # ---------------------------------------------------------------------------
 
 ### Get sale -> expect 200 with full payload
-GET {{host}}/api/sales/{{saleId}}
-Authorization: Bearer {{token}}
+GET {{host}}/api/sales/{{createSale.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.token}}
 
+
+###
 # ---------------------------------------------------------------------------
 # 4. List sales with paging + ordering + filtering
 # ---------------------------------------------------------------------------
 
 ### List sales (page 1, size 5, sorted by saleDate desc, filtered by customer)
-GET {{host}}/api/sales?_page=1&_size=5&_order=saleDate desc&customerId=11111111-1111-1111-1111-111111111111&_minTotalAmount=100
-Authorization: Bearer {{token}}
+GET {{host}}/api/sales?_page=1&_size=5&_order=saleDate%20desc&customerId=11111111-1111-1111-1111-111111111111&_minTotalAmount=100
+Authorization: Bearer {{login.response.body.$.data.token}}
 
 ### List sales (multi-field order, no filters)
-GET {{host}}/api/sales?_page=1&_size=10&_order=customerId asc, saleDate desc
-Authorization: Bearer {{token}}
+GET {{host}}/api/sales?_page=1&_size=10&_order=customerId%20asc,saleDate%20desc
+Authorization: Bearer {{login.response.body.$.data.token}}
 
 # ---------------------------------------------------------------------------
 # 5. Update sale (re-runs discount rules)
 # ---------------------------------------------------------------------------
 
 ### Update sale -> expect 200 with recomputed totalAmount
-PUT {{host}}/api/sales/{{saleId}}
-Authorization: Bearer {{token}}
+PUT {{host}}/api/sales/{{createSale.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.token}}
 Content-Type: application/json
 
 {
@@ -122,6 +128,8 @@ Content-Type: application/json
   ]
 }
 
+###
+
 # ---------------------------------------------------------------------------
 # 6. Cancel a single sale item
 # ---------------------------------------------------------------------------
@@ -130,25 +138,25 @@ Content-Type: application/json
 @itemId = REPLACE_WITH_ITEM_ID_FROM_GET_OR_CREATE_RESPONSE
 
 ### Cancel item -> expect 200 with newTotalAmount; ItemCancelled in console log
-PATCH {{host}}/api/sales/{{saleId}}/items/{{itemId}}/cancel
-Authorization: Bearer {{token}}
+PATCH {{host}}/api/sales/{{createSale.response.body.$.data.id}}/items/{{itemId}}/cancel
+Authorization: Bearer {{login.response.body.$.data.token}}
 
 # ---------------------------------------------------------------------------
 # 7. Cancel the entire sale
 # ---------------------------------------------------------------------------
 
 ### Cancel sale -> expect 200; SaleCancelled in console log
-PATCH {{host}}/api/sales/{{saleId}}/cancel
-Authorization: Bearer {{token}}
+PATCH {{host}}/api/sales/{{createSale.response.body.$.data.id}}/cancel
+Authorization: Bearer {{login.response.body.$.data.token}}
 
 # ---------------------------------------------------------------------------
 # 8. Delete sale
 # ---------------------------------------------------------------------------
 
 ### Delete sale -> expect 200
-DELETE {{host}}/api/sales/{{saleId}}
-Authorization: Bearer {{token}}
+DELETE {{host}}/api/sales/{{createSale.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.token}}
 
 ### Get deleted sale -> expect 404
-GET {{host}}/api/sales/{{saleId}}
-Authorization: Bearer {{token}}
+GET {{host}}/api/sales/{{createSale.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.token}}
