@@ -31,11 +31,12 @@ public class UpdateSaleHandler : IRequestHandler<UpdateSaleCommand, GetSaleResul
         var sale = await _saleRepository.GetByIdAsync(command.Id, cancellationToken)
             ?? throw new KeyNotFoundException($"Sale with ID {command.Id} not found");
 
-        sale.SaleDate = command.SaleDate;
-        sale.CustomerId = command.CustomerId;
-        sale.CustomerName = command.CustomerName;
-        sale.BranchId = command.BranchId;
-        sale.BranchName = command.BranchName;
+        sale.Update(
+            command.SaleDate,
+            command.CustomerId,
+            command.CustomerName,
+            command.BranchId,
+            command.BranchName);
 
         sale.ReplaceItems(command.Items.Select(i =>
             (i.ProductId, i.ProductName, i.Quantity, i.UnitPrice)));

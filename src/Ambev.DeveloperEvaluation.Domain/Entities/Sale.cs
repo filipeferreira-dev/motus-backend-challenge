@@ -55,6 +55,32 @@ public class Sale : BaseEntity
         };
     }
 
+    public void Update(
+        DateTime saleDate,
+        Guid customerId,
+        string customerName,
+        Guid branchId,
+        string branchName)
+    {
+        EnsureActive();
+
+        if (customerId == Guid.Empty)
+            throw new DomainException("CustomerId is required");
+        if (string.IsNullOrWhiteSpace(customerName))
+            throw new DomainException("CustomerName is required");
+        if (branchId == Guid.Empty)
+            throw new DomainException("BranchId is required");
+        if (string.IsNullOrWhiteSpace(branchName))
+            throw new DomainException("BranchName is required");
+
+        SaleDate = saleDate;
+        CustomerId = customerId;
+        CustomerName = customerName;
+        BranchId = branchId;
+        BranchName = branchName;
+        Touch();
+    }
+
     public SaleItem AddItem(Guid productId, string productName, int quantity, decimal unitPrice)
     {
         EnsureActive();

@@ -2,6 +2,7 @@ using Ambev.DeveloperEvaluation.Domain.Common;
 using Ambev.DeveloperEvaluation.Domain.Entities;
 using Ambev.DeveloperEvaluation.Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Ambev.DeveloperEvaluation.ORM.Repositories;
 
@@ -23,8 +24,24 @@ public class SaleRepository : ISaleRepository
 
     public async Task<Sale> UpdateAsync(Sale sale, CancellationToken cancellationToken = default)
     {
-        _context.Sales.Update(sale);
+        var trackedItems = _context.ChangeTracker.Entries<SaleItem>()
+            .Where(e => e.Entity.SaleId == sale.Id)
+            .ToList();
+        foreach (var entry in trackedItems)
+            entry.State = EntityState.Detached;
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+        await _context.Set<SaleItem>()
+            .Where(i => i.SaleId == sale.Id)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        foreach (var item in sale.Items)
+            _context.Set<SaleItem>().Add(item);
+
         await _context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
         return sale;
     }
 
