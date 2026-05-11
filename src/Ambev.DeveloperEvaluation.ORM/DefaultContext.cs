@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
 namespace Ambev.DeveloperEvaluation.ORM;
@@ -22,6 +23,7 @@ public class DefaultContext : DbContext
         base.OnModelCreating(modelBuilder);
     }
 }
+[ExcludeFromCodeCoverage]
 public class YourDbContextFactory : IDesignTimeDbContextFactory<DefaultContext>
 {
     public DefaultContext CreateDbContext(string[] args)
