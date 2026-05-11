@@ -1,6 +1,162 @@
-@Ambev.DeveloperEvaluation.WebApi_HostAddress = http://localhost:5119
+@host = https://localhost:7181
 
-GET {{Ambev.DeveloperEvaluation.WebApi_HostAddress}}/weatherforecast/
-Accept: application/json
+# ---------------------------------------------------------------------------
+# 0. Authenticate
+# ---------------------------------------------------------------------------
+# Run this first; copy the returned token into @token below.
+# (You'll need to POST /api/users to seed an account if none exists.)
+
+### Seed user (run once)
+POST {{host}}/api/users
+Content-Type: application/json
+
+{
+  "username": "demo-user",
+  "password": "Test@123!",
+  "email": "demo@example.com",
+  "phone": "+5511999999999",
+  "status": 1,
+  "role": 1
+}
 
 ###
+
+### Authenticate
+# @name login
+POST {{host}}/api/auth
+Content-Type: application/json
+
+{
+  "email": "demo@example.com",
+  "password": "Test@123!"
+}
+
+###
+
+# ---------------------------------------------------------------------------
+# 1. Create sale - golden path (mixed-tier discounts)
+# ---------------------------------------------------------------------------
+# 2 @ $10  = $20.00 (no discount)
+# 5 @ $20  = $90.00 (10% discount, 100 - 10)
+# 15 @ $8  = $96.00 (20% discount, 120 - 24)
+# Total                          = $206.00
+
+### Create sale (mixed tiers) -> expect 201, totalAmount = 206
+# @name createSale
+POST {{host}}/api/sales
+Authorization: Bearer {{login.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "saleNumber": "S-DEMO-002",
+  "saleDate": "2026-05-08T10:00:00Z",
+  "customerId": "11111111-1111-1111-1111-111111111111",
+  "customerName": "Acme Corp",
+  "branchId": "22222222-2222-2222-2222-222222222222",
+  "branchName": "Downtown Branch",
+  "items": [
+    { "productId": "33333333-3333-3333-3333-333333333333", "productName": "Widget A", "quantity": 2, "unitPrice": 10.00 },
+    { "productId": "44444444-4444-4444-4444-444444444444", "productName": "Widget B", "quantity": 5, "unitPrice": 20.00 },
+    { "productId": "55555555-5555-5555-5555-555555555555", "productName": "Widget C", "quantity": 15, "unitPrice": 8.00 }
+  ]
+}
+
+###
+
+# ---------------------------------------------------------------------------
+# 2. Create sale - reject quantity > 20
+# ---------------------------------------------------------------------------
+
+### Create sale (qty 21) -> expect 400 with DomainException message
+POST {{host}}/api/sales
+Authorization: Bearer {{login.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "saleNumber": "S-DEMO-002",
+  "saleDate": "2026-05-08T10:00:00Z",
+  "customerId": "11111111-1111-1111-1111-111111111111",
+  "customerName": "Acme Corp",
+  "branchId": "22222222-2222-2222-2222-222222222222",
+  "branchName": "Downtown Branch",
+  "items": [
+    { "productId": "33333333-3333-3333-3333-333333333333", "productName": "Bulk Widget", "quantity": 21, "unitPrice": 5.00 }
+  ]
+}
+
+###
+
+# ---------------------------------------------------------------------------
+# 3. Get sale by id
+# ---------------------------------------------------------------------------
+
+### Get sale -> expect 200 with full payload
+GET {{host}}/api/sales/{{createSale.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.token}}
+
+
+###
+# ---------------------------------------------------------------------------
+# 4. List sales with paging + ordering + filtering
+# ---------------------------------------------------------------------------
+
+### List sales (page 1, size 5, sorted by saleDate desc, filtered by customer)
+GET {{host}}/api/sales?_page=1&_size=5&_order=saleDate%20desc&customerId=11111111-1111-1111-1111-111111111111&_minTotalAmount=100
+Authorization: Bearer {{login.response.body.$.data.token}}
+
+### List sales (multi-field order, no filters)
+GET {{host}}/api/sales?_page=1&_size=10&_order=customerId%20asc,saleDate%20desc
+Authorization: Bearer {{login.response.body.$.data.token}}
+
+# ---------------------------------------------------------------------------
+# 5. Update sale (re-runs discount rules)
+# ---------------------------------------------------------------------------
+
+### Update sale -> expect 200 with recomputed totalAmount
+PUT {{host}}/api/sales/{{createSale.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.token}}
+Content-Type: application/json
+
+{
+  "saleDate": "2026-05-08T11:00:00Z",
+  "customerId": "11111111-1111-1111-1111-111111111111",
+  "customerName": "Acme Corp",
+  "branchId": "22222222-2222-2222-2222-222222222222",
+  "branchName": "Downtown Branch",
+  "items": [
+    { "productId": "33333333-3333-3333-3333-333333333333", "productName": "Widget A", "quantity": 4, "unitPrice": 10.00 }
+  ]
+}
+
+###
+
+# ---------------------------------------------------------------------------
+# 6. Cancel a single sale item
+# ---------------------------------------------------------------------------
+# After Get above, copy one of the item ids into @itemId.
+
+@itemId = REPLACE_WITH_ITEM_ID_FROM_GET_OR_CREATE_RESPONSE
+
+### Cancel item -> expect 200 with newTotalAmount; ItemCancelled in console log
+PATCH {{host}}/api/sales/{{createSale.response.body.$.data.id}}/items/{{itemId}}/cancel
+Authorization: Bearer {{login.response.body.$.data.token}}
+
+# ---------------------------------------------------------------------------
+# 7. Cancel the entire sale
+# ---------------------------------------------------------------------------
+
+### Cancel sale -> expect 200; SaleCancelled in console log
+PATCH {{host}}/api/sales/{{createSale.response.body.$.data.id}}/cancel
+Authorization: Bearer {{login.response.body.$.data.token}}
+
+# ---------------------------------------------------------------------------
+# 8. Delete sale
+# ---------------------------------------------------------------------------
+
+### Delete sale -> expect 200
+DELETE {{host}}/api/sales/{{createSale.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.token}}
+
+### Get deleted sale -> expect 404
+GET {{host}}/api/sales/{{createSale.response.body.$.data.id}}
+Authorization: Bearer {{login.response.body.$.data.token}}
